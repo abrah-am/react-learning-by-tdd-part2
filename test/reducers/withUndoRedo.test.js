@@ -3,6 +3,11 @@ import {
 } from '../../src/reducers/withUndoRedo';
 
 describe('withUndoRedo', () => {
+    const undoAction = { type: 'UNDO' };
+    const innerAction = { type: 'INNER' };
+    const present = { a: 123, nextInstructionId: 0 };
+    const future = { b: 234, nextInstructionId: 1 };
+
     let decoratedReducerSpy;
     let reducer;
 
@@ -43,8 +48,6 @@ describe('withUndoRedo', () => {
 
     describe('performing an action', () => {
         const innerAction = { type: 'INNER' };
-        const present = { a: 123, nextInstructionId: 0 };
-        const future = { b: 234, nextInstructionId: 1 };
 
         beforeEach(() => {
             decoratedReducerSpy.mockReturnValue(future);
@@ -79,5 +82,36 @@ describe('withUndoRedo', () => {
             expect(result).toBe(present)
         });
 
+    });
+
+    describe('undo', () => {
+        let newState;
+        beforeEach(() => {
+            decoratedReducerSpy.mockReturnValue(future);
+            newState = reducer(present, innerAction);
+        });
+
+        it('sets present to the latest past entry', () => {
+            const updated = reducer(newState, undoAction);
+            expect(updated).toMatchObject(present);
+        });
+
+        it('can undo multiple levels', () => {
+            const futureFuture = {
+                c: 345, nextInstructionId: 3
+            };
+            decoratedReducerSpy.mockReturnValue(futureFuture);
+            newState = reducer(newState, innerAction);
+            const updated = reducer(
+                reducer(newState, undoAction),
+                undoAction
+            );
+            expect(updated).toMatchObject(present);
+        });
+
+        it('sets canRedo to true after undoing', () => {
+            const updated = reducer(newState, undoAction);
+            expect(updated.canRedo).toBeTruthy();
+        });
     });
 });
