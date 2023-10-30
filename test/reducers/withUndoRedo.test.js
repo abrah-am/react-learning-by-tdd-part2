@@ -4,9 +4,11 @@ import {
 
 describe('withUndoRedo', () => {
     const undoAction = { type: 'UNDO' };
+    const redoAction = { type: 'REDO' };
     const innerAction = { type: 'INNER' };
     const present = { a: 123, nextInstructionId: 0 };
     const future = { b: 234, nextInstructionId: 1 };
+    const futureFuture = { c: 345, nextInstructionId: 3 };
 
     let decoratedReducerSpy;
     let reducer;
@@ -97,9 +99,6 @@ describe('withUndoRedo', () => {
         });
 
         it('can undo multiple levels', () => {
-            const futureFuture = {
-                c: 345, nextInstructionId: 3
-            };
             decoratedReducerSpy.mockReturnValue(futureFuture);
             newState = reducer(newState, innerAction);
             const updated = reducer(
@@ -112,6 +111,50 @@ describe('withUndoRedo', () => {
         it('sets canRedo to true after undoing', () => {
             const updated = reducer(newState, undoAction);
             expect(updated.canRedo).toBeTruthy();
+        });
+    });
+
+    describe('redo', () => {
+        let newState;
+
+        beforeEach(() => {
+            decoratedReducerSpy.mockReturnValueOnce(future);
+            decoratedReducerSpy.mockReturnValueOnce(futureFuture);
+            
+            newState = reducer(present, innerAction);
+            newState = reducer(newState, innerAction);
+            newState = reducer(newState, undoAction);
+            newState = reducer(newState, undoAction);
+        });
+
+        it('sets the present to the latest future entry', () => {
+            const updated = reducer(newState, redoAction);
+            expect(updated).toMatchObject(future);
+        });
+
+        it('can redo multiple levels', () => {
+            const updated = reducer(
+                reducer(newState, redoAction),
+                redoAction
+            );
+            expect(updated).toMatchObject(futureFuture);
+        });
+
+        it('returns to previous state when followed by an undo', () => {
+            const updated = reducer(
+                reducer(newState, redoAction),
+                undoAction
+            );
+            expect(updated).toMatchObject(present);
+        });
+
+        it('return undefined when attempting a do, undo, do, redo sequence', () => {
+            decoratedReducerSpy.mockReturnValue(future);
+            let newState = reducer(present, innerAction);
+            newState = reducer(newState, undoAction);
+            newState = reducer(newState, innerAction);
+            newState = reducer(newState, redoAction);
+            expect(newState).not.toBeDefined();
         });
     });
 });
